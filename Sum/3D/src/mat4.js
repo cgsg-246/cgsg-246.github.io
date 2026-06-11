@@ -46,9 +46,11 @@ export function initMouseControl(canvas) {
 
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
+        console.log("Крутим колесо! DeltaY:", e.deltaY, "Текущая дистанция:", cameraDistance);
+    
         const zoomSensitivity = 0.002;
         cameraDistance += e.deltaY * zoomSensitivity;
-
+        
         const minDistance = 1.5;
         const maxDistance = 8.0;
         if (cameraDistance < minDistance) cameraDistance = minDistance;
