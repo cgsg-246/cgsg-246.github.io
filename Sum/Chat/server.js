@@ -6,20 +6,30 @@ const cors = require("cors");
 
 const app = express();
 
+// Render требует слушать порт из переменной окружения 0.0.0.0
 const PORT = process.env.PORT || 8080;
 
-const FILE = path.join(__dirname, 'users.data');
-const MESSAGES_FILE = path.join(__dirname, 'messages.data');
+// Использование папки /tmp гарантирует, что у Node.js будут права на запись файлов на хостинге
+const FILE = path.join('/tmp', 'users.data');
+const MESSAGES_FILE = path.join('/tmp', 'messages.data');
 
 app.use(cors());
-
 app.use(express.json());
 
+// Инициализация данных с безопасным созданием файлов, если их нет
 let users = {};
-try { users = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {}; } catch { users = {}; }
+try { 
+    users = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {}; 
+} catch (e) { 
+    users = {}; 
+}
 
 let messagesHistory = [];
-try { messagesHistory = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8')) : []; } catch { messagesHistory = []; }
+try { 
+    messagesHistory = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8')) : []; 
+} catch (e) { 
+    messagesHistory = []; 
+}
 
 const getHash = (pass) => crypto.createHash('sha256').update(pass).digest('hex');
 
@@ -42,10 +52,15 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/register', (req, res) => {
-    const { username, password } = req.body;
-    users[username] = getHash(password);
-    try { fs.writeFileSync(FILE, JSON.stringify(users, null, 2)); } catch (e) { console.error(e); }
-    res.status(201).json({ username });
+    try {
+        const { username, password } = req.body;
+        users[username] = getHash(password);
+        fs.writeFileSync(FILE, JSON.stringify(users, null, 2));
+        res.status(201).json({ username });
+    } catch (e) {
+        console.error("Ошибка регистрации:", e);
+        res.status(500).json({ message: "Ошибка записи данных" });
+    }
 });
 
 app.get('/api/messages', (req, res) => {
@@ -53,18 +68,30 @@ app.get('/api/messages', (req, res) => {
 });
 
 app.post('/api/message', (req, res) => {
-    const { user, text } = req.body;
-    const msgObject = { user, text };
-    messagesHistory.push(msgObject);
-    if (messagesHistory.length > 100) messagesHistory.shift(); // Храним только последние 100 сообщений
-    try { fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messagesHistory, null, 2)); } catch (e) { console.error(e); }
-    res.status(201).json(msgObject);
+    try {
+        const { user, text } = req.body;
+        const msgObject = { user, text };
+        messagesHistory.push(msgObject);
+        if (messagesHistory.length > 100) messagesHistory.shift();
+        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messagesHistory, null, 2));
+        res.status(201).json(msgObject);
+    } catch (e) {
+        console.error("Ошибка сохранения сообщения:", e);
+        res.status(500).json({ message: "Ошибка сохранения" });
+    }
 });
 
-app.use(express.static(path.join(__dirname, 'dist')));
+// Проверка наличия папки фронтенда перед раздачей, чтобы сервер не падал при запуске
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+    });
+} else {
+    // Если фронтенд еще не собран, отдаем заглушку, чтобы Render прошел билд-тест
+    app.get('*', (req, res) => res.send('Фронтенд собирается или папка dist отсутствует в Git. Бэкенд работает!'));
+}
 
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Привязка к 0.0.0.0 обязательна для некоторых конфигураций облачных провайдеров
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
