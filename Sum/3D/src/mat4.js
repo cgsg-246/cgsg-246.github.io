@@ -29,8 +29,8 @@ export function initMouseControl(canvas) {
         const deltaY = e.clientY - lastMouseY;
 
         const sensitivity = 0.005; 
-        cameraAngleY -= deltaX * sensitivity;
-        cameraAngleX += deltaY * sensitivity;
+        cameraAngleY += deltaX * sensitivity;
+        cameraAngleX -= deltaY * sensitivity;
 
         const maxPitch = Math.PI / 2 - 0.01;
         if (cameraAngleX > maxPitch) cameraAngleX = maxPitch;
